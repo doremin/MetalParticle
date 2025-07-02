@@ -19,7 +19,7 @@ class DisintegrateView: MTKView {
     private var pipelineStae: MTLRenderPipelineState!
     private var uniformBuffer: MTLBuffer!
     
-    // MARK: Initializer
+    // MARK: - Initializer
     override init(frame frameRect: CGRect, device: (any MTLDevice)?) {
         super.init(frame: frameRect, device: device)
         
@@ -87,5 +87,32 @@ class DisintegrateView: MTKView {
     private func setupUniformBuffer() -> MTLBuffer? {
         guard let device else { return nil }
         return device.makeBuffer(length: MemoryLayout<Uniforms>.size)
+    }
+    
+    // MARK: - Create Texture From UIView
+    private func createTexture(from view: UIView, bounds: CGRect) -> MTLTexture? {
+        guard
+            let device,
+            let cgImage = uiImage(from: view, bounds: bounds).cgImage
+        else {
+            return nil
+        }
+        
+        let textureLoader = MTKTextureLoader(device: device)
+        
+        do {
+            return try textureLoader.newTexture(cgImage: cgImage)
+        } catch {
+            return nil
+        }
+    }
+    
+    private func uiImage(from view: UIView, bounds: CGRect) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(bounds: bounds)
+        let snapshotImage = renderer.image { context in
+            view.layer.render(in: context.cgContext)
+        }
+        
+        return snapshotImage
     }
 }
