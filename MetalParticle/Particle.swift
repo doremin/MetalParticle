@@ -12,7 +12,5 @@ struct Particle {
     var position: simd_float2
     var velocity: simd_float2
     var life: Float
-    var scale: Float
     var textureCoord: simd_float2
-    var tileSize: Float
 }

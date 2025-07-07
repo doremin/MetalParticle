@@ -7,21 +7,18 @@
 
 import MetalKit
 
-struct Uniforms {
-    var time: Float
-    var screenSize: simd_float2
-}
-
 class DisintegrateView: MTKView {
     
+    // MARK: - Metal Properties
     private var commandQueue: MTLCommandQueue!
     private var pipelineStae: MTLRenderPipelineState!
     private var uniformBuffer: MTLBuffer!
     private var particleBuffer: MTLBuffer!
-    private var particleCount: Int = 0
     private var texture: MTLTexture!
     
-    private var animationStartTime: CFTimeInterval = 0
+    // MARK: - Properties
+    private var particles: [Particle] = []
+    private var animationStartTime: CFTimeInterval = .zero
     
     // MARK: - Initializer
     override init(frame frameRect: CGRect, device: (any MTLDevice)?) {
@@ -44,15 +41,13 @@ class DisintegrateView: MTKView {
         
         guard
             let commandQueue = device.makeCommandQueue(),
-            let pipelineState = setupPipelineDescriptor(),
-            let uniformBuffer = setupUniformBuffer()
+            let pipelineState = setupPipelineDescriptor()
         else {
             return
         }
         
         self.commandQueue = commandQueue
         self.pipelineStae = pipelineState
-        self.uniformBuffer = uniformBuffer
         
         clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         isOpaque = false
@@ -87,11 +82,6 @@ class DisintegrateView: MTKView {
         } catch {
             fatalError("Failed to create render pipeline state: \(error)")
         }
-    }
-    
-    private func setupUniformBuffer() -> MTLBuffer? {
-        guard let device else { return nil }
-        return device.makeBuffer(length: MemoryLayout<Uniforms>.size)
     }
     
     // MARK: - Create Texture From UIView
@@ -152,7 +142,6 @@ class DisintegrateView: MTKView {
         for x in 0 ..< tilesPerRow {
             for y in 0 ..< tilesPerColumn {
                 // Metal에서 Texture는 0...1 의 값
-                // (0, 0)은 좌하단 (1, 1)은 우상단
                 let textureX = Float(x) * tileSize / Float(imageWidth)
                 let textureY = Float(y) * tileSize / Float(imageHeight)
                 
@@ -167,16 +156,14 @@ class DisintegrateView: MTKView {
                 
                 // Particle이 이동할 위치
                 // 전체적으로 우상단 방향으로 이동하지만 모두가 이동하지는 않게 적절한 값으로..
-                let dx = Float.random(in: 100 ... 900)
-                let dy = Float.random(in: -300 ... 100)
+                let dx = Float.random(in: 0.05 ... 0.1)
+                let dy = Float.random(in: -0.01 ... 0.03)
                 
                 let particle = Particle(
                     position: simd_float2(normalizedX, normalizedY),
                     velocity: simd_float2(dx, dy),
                     life: 1.0,
-                    scale: 5.0,
                     textureCoord: simd_float2(textureX, textureY),
-                    tileSize: tileSize / Float(scale)
                 )
                 
                 particles.append(particle)
@@ -199,32 +186,38 @@ class DisintegrateView: MTKView {
             return
         }
         
-        var uniforms = Uniforms(
-            time: Float(CACurrentMediaTime()),
-            screenSize: simd_float2(Float(bounds.width), Float(bounds.height)),
-            
-        )
-        
-        uniformBuffer.contents().copyMemory(from: &uniforms, byteCount: MemoryLayout<Uniforms>.size)
-        
+        updateParticles()
+
         renderEncoder.setRenderPipelineState(pipelineStae)
         renderEncoder.setVertexBuffer(particleBuffer, offset: 0, index: 0)
-        renderEncoder.setVertexBuffer(uniformBuffer, offset: 0, index: 1)
         renderEncoder.setFragmentTexture(texture, index: 0)
         
-        renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: particleCount)
+        renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: particles.count)
         renderEncoder.endEncoding()
         commandBuffer.present(drawable)
         commandBuffer.commit()
     }
     
+    private func updateParticles() {
+        let currentTime = CACurrentMediaTime()
+        let elapsedTime = Float(currentTime - animationStartTime)
+        
+        for i in 0 ..< particles.count {
+            particles[i].position.x += particles[i].velocity.x * elapsedTime
+            particles[i].position.y += particles[i].velocity.y * elapsedTime
+            particles[i].life = max(0.0, 1.0 - elapsedTime)
+        }
+        
+        let bufferSize = MemoryLayout<Particle>.size * particles.count
+        _ = particles.withUnsafeBufferPointer { particlesPtr in
+            memcpy(particleBuffer.contents(), particlesPtr.baseAddress, bufferSize)
+        }
+    }
+    
     // MARK: - Disintegrate Public API
     public func disintegrate(
         from view: UIView,
-        maxTile: Int = 5000,
-        duration: TimeInterval = 1.0,
-        dx: ClosedRange<Int> = 100 ... 900,
-        dy: ClosedRange<Int> = -300 ... 100,
+        maxTile: Int = 50000,
         inset: CGFloat = 20
     ) {
         guard
@@ -241,6 +234,7 @@ class DisintegrateView: MTKView {
             return
         }
         
+        particles.removeAll()
         frame = window.bounds
         window.addSubview(self)
         
@@ -249,13 +243,14 @@ class DisintegrateView: MTKView {
             bytes: particles,
             length: MemoryLayout<Particle>.size * particles.count,
         )
-        particleCount = particles.count
-        self.texture = texture
         
-        animationStartTime = CACurrentMediaTime()
+        self.particles = particles
+        self.texture = texture
+        self.animationStartTime = CACurrentMediaTime()
+        
         view.removeFromSuperview()
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.removeFromSuperview()
         }
     }
