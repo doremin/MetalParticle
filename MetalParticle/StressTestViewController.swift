@@ -86,26 +86,6 @@ final class StressTestViewController: UIViewController {
         self.targetView = box
     }
     
-    @objc private func runStressTest() {
-        // 기존 파티클 뷰가 있으면 제거
-        disintegrateView?.removeFromSuperview()
-        
-        // DisintegrateView 생성
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            let alert = UIAlertController(title: "Metal 미지원", message: "이 기기에서는 Metal을 사용할 수 없습니다.", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "확인", style: .default))
-            present(alert, animated: true)
-            return
-        }
-        
-        let disintegrateView = DisintegrateView(frame: view.bounds, device: device)
-        view.addSubview(disintegrateView)
-        self.disintegrateView = disintegrateView
-        
-        // 타겟 뷰 다시 생성 (계속 테스트 반복 가능하게)
-        setupTargetView()
-    }
-    
     private func setupFPSDisplayLink() {
         displayLink?.invalidate()
         displayLink = CADisplayLink(target: self, selector: #selector(updateFPS))
