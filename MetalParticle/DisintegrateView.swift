@@ -208,6 +208,7 @@ class DisintegrateView: MTKView {
             particles[i].life = max(0.0, 1.0 - elapsedTime)
         }
         
+        // Buffer에 있는 컨텐츠를 기반으로 GPU에서 그리기 떄문에 업데이트 된 particles를 덮어씌우기
         let bufferSize = MemoryLayout<Particle>.size * particles.count
         _ = particles.withUnsafeBufferPointer { particlesPtr in
             memcpy(particleBuffer.contents(), particlesPtr.baseAddress, bufferSize)
