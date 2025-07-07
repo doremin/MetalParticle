@@ -77,8 +77,6 @@ class DisintegrationViewController: UIViewController {
     }
     
     @objc private func disintegrateView() {
-//        let metalView = MetalDisintegrationView()
-//        metalView.disintegrate(view: testView, maxTiles: 30000, inset: -40)
         let metalView = DisintegrateView()
         metalView.disintegrate(from: testView, maxTile: 50000, inset: -40)
     }
