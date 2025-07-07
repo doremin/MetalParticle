@@ -203,8 +203,11 @@ class DisintegrateView: MTKView {
         let elapsedTime = Float(currentTime - animationStartTime)
         
         for i in 0 ..< particles.count {
-            particles[i].position.x += particles[i].velocity.x * elapsedTime
-            particles[i].position.y += particles[i].velocity.y * elapsedTime
+            particles[i].position += particles[i].velocity * elapsedTime
+//            위 코드와 아래의 코드는 같은 동작을 하지만 위 코드는 SIMD 연산을 사용해서 더 빠를 것으로 예상
+//            particles[i].position.x += particles[i].velocity.x * elapsedTime
+//            particles[i].position.y += particles[i].velocity.y * elapsedTime
+            
             particles[i].life = max(0.0, 1.0 - elapsedTime)
         }
         
