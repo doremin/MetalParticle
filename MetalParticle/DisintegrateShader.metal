@@ -9,6 +9,10 @@ struct Particle {
     float2 textureCoord;
 };
 
+struct Uniforms {
+    float time;
+};
+
 struct VertexOut {
     float4 position [[position]];
     float2 textureCoord;
@@ -17,14 +21,16 @@ struct VertexOut {
 };
 
 vertex VertexOut particleVertexShader(uint vertexID [[vertex_id]],
-                                      constant Particle* particles [[buffer(0)]]) {
+                                      constant Particle* particles [[buffer(0)]],
+                                      constant Uniforms& uniforms [[buffer(1)]]) {
     Particle particle = particles[vertexID];
     
     VertexOut out;
-    out.position = float4(particle.position, 0.0, 1.0);
+    float2 position = particle.position + particle.velocity * uniforms.time;
+    out.position = float4(position, 0.0, 1.0);
     out.textureCoord = particle.textureCoord;
     out.pointSize = 5.0;
-    out.alpha = particle.life;
+    out.alpha = 1.0 - uniforms.time;
     return out;
 };
 

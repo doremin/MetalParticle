@@ -7,6 +7,10 @@
 
 import MetalKit
 
+struct Uniforms {
+    var time: Float
+}
+
 class DisintegrateView: MTKView {
     
     // MARK: - Metal Properties
@@ -19,6 +23,7 @@ class DisintegrateView: MTKView {
     // MARK: - Properties
     private var particles: [Particle] = []
     private var animationStartTime: CFTimeInterval = .zero
+    private var uniforms = Uniforms(time: 0)
     
     // MARK: - Initializer
     override init(frame frameRect: CGRect, device: (any MTLDevice)?) {
@@ -41,13 +46,15 @@ class DisintegrateView: MTKView {
         
         guard
             let commandQueue = device.makeCommandQueue(),
-            let pipelineState = setupPipelineDescriptor()
+            let pipelineState = setupPipelineDescriptor(),
+            let uniformBuffer = setupUniformsBuffer()
         else {
             return
         }
         
         self.commandQueue = commandQueue
         self.pipelineStae = pipelineState
+        self.uniformBuffer = uniformBuffer
         
         clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         isOpaque = false
@@ -82,6 +89,13 @@ class DisintegrateView: MTKView {
         } catch {
             fatalError("Failed to create render pipeline state: \(error)")
         }
+    }
+    
+    private func setupUniformsBuffer() -> MTLBuffer? {
+        guard let device else { return nil }
+        
+        let bufferSize = MemoryLayout<Uniforms>.size
+        return device.makeBuffer(length: bufferSize)
     }
     
     // MARK: - Create Texture From UIView
@@ -156,8 +170,8 @@ class DisintegrateView: MTKView {
                 
                 // Particle이 이동할 위치
                 // 전체적으로 우상단 방향으로 이동하지만 모두가 이동하지는 않게 적절한 값으로..
-                let dx = Float.random(in: 0.05 ... 0.1)
-                let dy = Float.random(in: -0.01 ... 0.03)
+                let dx = Float.random(in: 0.7 ... 2.5)
+                let dy = Float.random(in: -0.3 ... 0.5)
                 
                 let particle = Particle(
                     position: simd_float2(normalizedX, normalizedY),
@@ -186,10 +200,11 @@ class DisintegrateView: MTKView {
             return
         }
         
-        updateParticles()
+        updateUniforms()
 
         renderEncoder.setRenderPipelineState(pipelineStae)
         renderEncoder.setVertexBuffer(particleBuffer, offset: 0, index: 0)
+        renderEncoder.setVertexBuffer(uniformBuffer, offset: 0, index: 1)
         renderEncoder.setFragmentTexture(texture, index: 0)
         
         renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: particles.count)
@@ -198,25 +213,38 @@ class DisintegrateView: MTKView {
         commandBuffer.commit()
     }
     
-    private func updateParticles() {
+    private func updateUniforms() {
         let currentTime = CACurrentMediaTime()
-        let elapsedTime = Float(currentTime - animationStartTime)
         
-        for i in 0 ..< particles.count {
-            particles[i].position += particles[i].velocity * elapsedTime
+        if animationStartTime == .zero {
+            animationStartTime = currentTime
+            return
+        }
+        
+        let elapsedTime = Float(currentTime - animationStartTime)
+        uniforms.time = elapsedTime
+        
+        memcpy(uniformBuffer.contents(), &uniforms, MemoryLayout<Uniforms>.size)
+    }
+    
+/// Particle의 position 계산 로직을 GPU로 옮김!
+/// 아래 코드는 이전에 CPU 에서 계산하던 position 계산 로직
+//    private func updateParticles() {
+//        for i in 0 ..< particles.count {
+//            particles[i].position += particles[i].velocity * elapsedTime
 //            위 코드와 아래의 코드는 같은 동작을 하지만 위 코드는 SIMD 연산을 사용해서 더 빠를 것으로 예상
 //            particles[i].position.x += particles[i].velocity.x * elapsedTime
 //            particles[i].position.y += particles[i].velocity.y * elapsedTime
             
-            particles[i].life = max(0.0, 1.0 - elapsedTime)
-        }
+//            particles[i].life = max(0.0, 1.0 - elapsedTime)
+//        }
         
         // Buffer에 있는 컨텐츠를 기반으로 GPU에서 그리기 떄문에 업데이트 된 particles를 덮어씌우기
-        let bufferSize = MemoryLayout<Particle>.size * particles.count
-        _ = particles.withUnsafeBufferPointer { particlesPtr in
-            memcpy(particleBuffer.contents(), particlesPtr.baseAddress, bufferSize)
-        }
-    }
+//        let bufferSize = MemoryLayout<Particle>.size * particles.count
+//        _ = particles.withUnsafeBufferPointer { particlesPtr in
+//            memcpy(particleBuffer.contents(), particlesPtr.baseAddress, bufferSize)
+//        }
+//    }
     
     // MARK: - Disintegrate Public API
     public func disintegrate(
